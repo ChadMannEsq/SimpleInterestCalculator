@@ -260,8 +260,7 @@ export default function InterestCalculator() {
     const page1 = pdf.getPage(0);
     const page2 = pdf.getPage(1);
     const draw = (page, text, x, y, size = 10) => page.drawText(String(text ?? ""), { x, y, size, font, color: rgb(0, 0, 0) });
-    const drawBlock = (page, text, x, yStart, lineH = 12) => String(text || "").split("
-").forEach((ln, i) => draw(page, ln, x, yStart - i * lineH));
+    const drawBlock = (page, text, x, yStart, lineH = 12) => String(text || "").split("\n").forEach((ln, i) => draw(page, ln, x, yStart - i * lineH));
 
     const garn = payload.payments.filter((p) => p.source === "garnishee");
     const direct = payload.payments.filter((p) => p.source === "direct");
