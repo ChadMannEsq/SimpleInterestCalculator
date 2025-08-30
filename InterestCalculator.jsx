@@ -150,18 +150,67 @@ export default function InterestCalculator() {
 
   // ========================= CSV Export =========================
   function exportCSV() {
-    const headers = ["Date","Type","Source","Note","Days","Accrued Interest","Payment","Expense","Applied to Interest","Applied to Principal","Principal Before","Principal After","Unpaid Interest (Carryover)"];
-    const lines = [headers.join(",")];
+    const headers = [
+      "Date",
+      "Type",
+      "Source",
+      "Note",
+      "Days",
+      "Accrued Interest",
+      "Payment",
+      "Expense",
+      "Applied to Interest",
+      "Applied to Principal",
+      "Principal Before",
+      "Principal After",
+      "Unpaid Interest (Carryover)"
+    ];
+    const lines = [headers.map(escapeCsv).join(",")];
     for (const r of schedule.rows) {
-      lines.push([r.date,r.type,r.source||"",escapeCsv(r.note||""),r.days,fixed(r.accrued),fixed(r.payment),fixed(r.expense),fixed(r.appliedToInterest),fixed(r.appliedToPrincipal),fixed(r.principalBefore),fixed(r.principalAfter),fixed(r.carryInterest)].join(","));
+      lines.push([
+        r.date,
+        r.type,
+        r.source || "",
+        r.note || "",
+        String(r.days),
+        fixed(r.accrued),
+        fixed(r.payment),
+        fixed(r.expense),
+        fixed(r.appliedToInterest),
+        fixed(r.appliedToPrincipal),
+        fixed(r.principalBefore),
+        fixed(r.principalAfter),
+        fixed(r.carryInterest)
+      ].map(escapeCsv).join(","));
     }
     lines.push("");
-    lines.push(["Totals as of", asOfDate || (schedule.rows.at(-1)?.date || startDate), "", "", "", "", "", "", "", "", fixed(schedule.totals.principal), fixed(schedule.totals.carryInterest), fixed(schedule.totals.balance)].join(","));
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    lines.push([
+      "Totals as of",
+      asOfDate || (schedule.rows.at(-1)?.date || startDate),
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      fixed(schedule.totals.principal),
+      fixed(schedule.totals.carryInterest),
+      fixed(schedule.totals.balance)
+    ].map(escapeCsv).join(","));
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8;"
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const safeCase = caseName ? caseName.replace(/[^a-z0-9\-_. ]/gi, "_") : "schedule";
-    a.href = url; a.download = `${safeCase}_simple_interest_schedule.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    a.href = url;
+    a.download = `${safeCase}_simple_interest_schedule.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // ========================= CV93 Export =========================
