@@ -247,7 +247,7 @@ export default function InterestCalculator() {
       },
       payments,
       carryForwards,
-      signer: { name: signer.name, dateISO: signer.dateISO || period.thruISO || fmtDateISO(new Date().toISOString()) },
+      signer: { name: signer.name, dateISO: signer.dateISO || period.thruISO || fmtDateISO(new Date()) },
     };
   }
 
