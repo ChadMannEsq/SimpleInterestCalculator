@@ -88,7 +88,7 @@ export default function InterestCalculator() {
       .map((r) => ({ ...r, amountNum: parseMoney(r.amount) }))
       .filter((r) => r.date && Number.isFinite(r.amountNum) && r.amountNum !== 0);
     events.sort((a, b) => {
-      const d = daysBetween(a.date, b.date);
+      const d = new Date(a.date) - new Date(b.date);
       if (d !== 0) return d;
       return a.type === b.type ? 0 : a.type === "expense" ? -1 : 1;
     });
