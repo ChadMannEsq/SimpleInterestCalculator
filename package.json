@@ -1,0 +1,16 @@
+{
+  "name": "simpleinterestcalculator",
+  "version": "1.0.0",
+  "description": "A simple React-based calculator for computing interest schedules. It tracks payments and expenses and displays a running amortization schedule in the browser.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "jspdf": "^3.0.2"
+  }
+}
