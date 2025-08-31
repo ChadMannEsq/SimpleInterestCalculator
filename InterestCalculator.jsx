@@ -192,6 +192,28 @@ export default function InterestCalculator() {
       theme: "grid",
     });
 
+    // After the schedule table, output totals aligned at the end of the document
+    const finalY = pdf.lastAutoTable?.finalY || y;
+    const lines = [
+      `Principal (current): ${currency(schedule.totals.principal)}`,
+      `Unpaid Interest (carryover): ${currency(schedule.totals.carryInterest)}`,
+      `Total Due (as of ${fmtDateISO(asOfDate) || 'latest entry'}): ${currency(schedule.totals.balance)}`,
+    ];
+
+    let startY = finalY + 10; // add spacing after table
+    const lineHeight = pdf.getLineHeight() / pdf.internal.scaleFactor;
+    const bottomMargin = 10;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    if (startY + lines.length * lineHeight > pageHeight - bottomMargin) {
+      pdf.addPage();
+      startY = 10;
+    }
+
+    lines.forEach((text, i) => {
+      pdf.text(text, 10, startY + i * lineHeight);
+    });
+
     pdf.save(`${caseName || "schedule"}.pdf`);
   }
 
