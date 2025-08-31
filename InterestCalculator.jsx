@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 // ========================= Helpers =========================
 function currency(n) {
@@ -145,12 +146,38 @@ export default function InterestCalculator() {
     pdf.text(`Annual rate (%): ${annualRatePct}`, 10, y); y += 10;
     pdf.text(`As-of date: ${fmtDateISO(asOfDate)}`, 10, y); y += 20;
     pdf.text("Schedule:", 10, y); y += 10;
-    schedule.rows.forEach((r, i) => {
-      const line = `${fmtDateISO(r.date)} ${r.type} ${currency(r.payment || r.expense || 0)} P:${currency(r.principalAfter)} I:${currency(r.carryInterest)}`;
-      pdf.text(line, 10, y);
-      y += 10;
-      if (y > 280) { pdf.addPage(); y = 10; }
+
+    pdf.autoTable({
+      head: [[
+        "Date",
+        "Type",
+        "Payment",
+        "Expense",
+        "→ Interest",
+        "→ Principal",
+        "Principal (after)",
+        "Unpaid Interest",
+        "Source",
+        "Note",
+      ]],
+      body: schedule.rows.map((r) => [
+        fmtDateISO(r.date),
+        r.type,
+        r.payment ? currency(r.payment) : "—",
+        r.expense ? currency(r.expense) : "—",
+        r.appliedToInterest ? currency(r.appliedToInterest) : "—",
+        r.appliedToPrincipal ? currency(r.appliedToPrincipal) : "—",
+        currency(r.principalAfter),
+        currency(r.carryInterest),
+        r.source || "",
+        r.note || "",
+      ]),
+      startY: y,
+      styles: { lineWidth: 0.1 },
+      tableLineColor: [0, 0, 0],
+      theme: "grid",
     });
+
     pdf.save(`${caseName || "schedule"}.pdf`);
   }
 
