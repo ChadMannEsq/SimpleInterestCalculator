@@ -1,6 +1,6 @@
 # Simple Interest Calculator
 
-A simple React-based calculator for computing interest schedules.
+A simple React-based calculator for computing interest schedules. It tracks payments and expenses and displays a running amortization schedule in the browser.
 
 ## Browser Requirements
 
