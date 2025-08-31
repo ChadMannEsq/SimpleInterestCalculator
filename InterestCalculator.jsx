@@ -51,7 +51,7 @@ export default function InterestCalculator() {
   const [principalStart, setPrincipalStart] = useState("");
   const [startDate, setStartDate] = useState("");
   const [annualRatePct, setAnnualRatePct] = useState("9.000");
-  const [basis, setBasis] = useState(365);
+  const BASIS = 365;
   const [asOfDate, setAsOfDate] = useState("");
   const [rows, setRows] = useState([blankRow("payment")]);
 
@@ -65,9 +65,8 @@ export default function InterestCalculator() {
 
   const dailyRate = useMemo(() => {
     const a = Number(annualRatePct);
-    const b = Number(basis);
-    return Number.isFinite(a) && Number.isFinite(b) && b > 0 ? a / 100 / b : 0;
-  }, [annualRatePct, basis]);
+    return Number.isFinite(a) ? a / 100 / BASIS : 0;
+  }, [annualRatePct]);
 
   // Build computed schedule
   const schedule = useMemo(() => {
@@ -172,18 +171,9 @@ export default function InterestCalculator() {
                 <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-xl border p-2" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4 items-end">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1">Annual interest rate (%)</label>
-                <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border p-2" placeholder="9.000" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Day count</label>
-                <select value={basis} onChange={(e) => setBasis(Number(e.target.value))} className="w-full rounded-xl border p-2">
-                  <option value={365}>Actual/365</option>
-                  <option value={360}>Banker’s/360</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Annual interest rate (%)</label>
+              <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border p-2" placeholder="9.000" />
             </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -287,7 +277,7 @@ export default function InterestCalculator() {
           <div className="rounded-2xl shadow-sm bg-white p-5">
             <h3 className="text-base font-semibold mb-2">Methodology</h3>
             <ol className="list-decimal ml-5 text-sm space-y-1 text-gray-700">
-              <li>Daily rate = (annual rate ÷ {basis}) per day. Accrued interest between entries = principal × daily rate × days.</li>
+              <li>Daily rate = (annual rate ÷ 365) per day. Accrued interest between entries = principal × daily rate × days.</li>
               <li>Payments apply to accrued/unpaid interest first; the remainder reduces principal.</li>
               <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
             </ol>
