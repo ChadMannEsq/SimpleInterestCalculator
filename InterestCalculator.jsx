@@ -175,21 +175,16 @@ export default function InterestCalculator() {
               <label className="block text-sm font-medium mb-1">Annual interest rate (%)</label>
               <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border p-2" placeholder="9.000" />
             </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
-                  <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border p-2" />
-                </div>
-                <div className="flex items-end">
-                  <button onClick={clearAll} className="mt-6 px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
-                </div>
-              </div>
-              </div>
-
+            <div>
+              <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
+              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border p-2" />
+            </div>
           </div>
 
+        </div>
+
           {/* Right panel: entries & schedule */}
-        <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 flex flex-col">
           <div className="rounded-2xl shadow-sm bg-white p-5">
             <h2 className="text-lg font-semibold mb-3">Entries</h2>
             {!headerSummary.principalValid || !headerSummary.startValid ? (
@@ -274,15 +269,18 @@ export default function InterestCalculator() {
             </div>
           </div>
 
-          <div className="rounded-2xl shadow-sm bg-white p-5">
-            <h3 className="text-base font-semibold mb-2">Methodology</h3>
-            <ol className="list-decimal ml-5 text-sm space-y-1 text-gray-700">
-              <li>Daily rate = (annual rate ÷ 365) per day. Accrued interest between entries = principal × daily rate × days.</li>
-              <li>Payments apply to accrued/unpaid interest first; the remainder reduces principal.</li>
-              <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
-            </ol>
+            <div className="rounded-2xl shadow-sm bg-white p-5">
+              <h3 className="text-base font-semibold mb-2">Methodology</h3>
+              <ol className="list-decimal ml-5 text-sm space-y-1 text-gray-700">
+                <li>Daily rate = (annual rate ÷ 365) per day. Accrued interest between entries = principal × daily rate × days.</li>
+                <li>Payments apply to accrued/unpaid interest first; the remainder reduces principal.</li>
+                <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
+              </ol>
+            </div>
+            <div className="flex justify-end mt-auto pt-6">
+              <button onClick={clearAll} className="px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
+            </div>
           </div>
-        </div>
       </div>
     </div>
   );
