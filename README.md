@@ -6,3 +6,7 @@ A simple React-based calculator for computing interest schedules. It tracks paym
 
 This component attempts to use [`crypto.randomUUID`](https://developer.mozilla.org/docs/Web/API/Crypto/randomUUID) when generating IDs for new rows. Browsers without this API fall back to a basic `Math.random` implementation, which is not cryptographically secure. For the best experience, use a modern browser with `crypto.randomUUID` support.
 
+## Exporting
+
+Use the **Print PDF** button to save the current case details and schedule as a PDF document.
+

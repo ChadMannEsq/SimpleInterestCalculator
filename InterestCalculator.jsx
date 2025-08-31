@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import jsPDF from "jspdf";
 
 // ========================= Helpers =========================
 function currency(n) {
@@ -133,6 +134,25 @@ export default function InterestCalculator() {
 
   function updateRow(id, patch) { setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
   function clearAll() { setRows([blankRow("payment")]); }
+
+  function printPDF() {
+    const pdf = new jsPDF();
+    let y = 10;
+    pdf.text(`Case: ${caseName}`, 10, y); y += 10;
+    pdf.text(`Debtor: ${debtor}`, 10, y); y += 10;
+    pdf.text(`Starting principal: ${principalStart}`, 10, y); y += 10;
+    pdf.text(`Start date: ${fmtDateISO(startDate)}`, 10, y); y += 10;
+    pdf.text(`Annual rate (%): ${annualRatePct}`, 10, y); y += 10;
+    pdf.text(`As-of date: ${fmtDateISO(asOfDate)}`, 10, y); y += 20;
+    pdf.text("Schedule:", 10, y); y += 10;
+    schedule.rows.forEach((r, i) => {
+      const line = `${fmtDateISO(r.date)} ${r.type} ${currency(r.payment || r.expense || 0)} P:${currency(r.principalAfter)} I:${currency(r.carryInterest)}`;
+      pdf.text(line, 10, y);
+      y += 10;
+      if (y > 280) { pdf.addPage(); y = 10; }
+    });
+    pdf.save(`${caseName || "schedule"}.pdf`);
+  }
 
 
   // ========================= UI =========================
@@ -277,9 +297,10 @@ export default function InterestCalculator() {
                 <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
               </ol>
             </div>
-            <div className="flex justify-end mt-auto pt-6">
-              <button onClick={clearAll} className="px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
-            </div>
+              <div className="flex justify-end mt-auto pt-6 space-x-2">
+                <button onClick={printPDF} className="px-4 py-2 rounded-xl border shadow-sm">Print PDF</button>
+                <button onClick={clearAll} className="px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
+              </div>
           </div>
       </div>
     </div>
