@@ -162,42 +162,42 @@ export default function InterestCalculator() {
   }, [principalStart, startDate]);
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800 p-6">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="min-h-screen w-full bg-gray-100 text-gray-800 p-4 md:p-6 font-sans">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Left panel: calculator */}
         <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-2xl shadow-sm bg-white p-5">
-            <h1 className="text-2xl font-semibold mb-1">Simple Interest Calculator</h1>
+          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
+            <h1 className="text-2xl font-semibold mb-1 text-indigo-700">Simple Interest Calculator</h1>
             <p className="text-sm text-gray-500">Payments, expenses, and daily simple interest.</p>
           </div>
 
           {/* Core calculator inputs */}
-          <div className="rounded-2xl shadow-sm bg-white p-5 space-y-4">
+          <div className="rounded-2xl bg-white p-4 md:p-6 space-y-4 shadow-md hover:shadow-lg transition-shadow">
             <div>
               <label className="block text-sm font-medium mb-1">Case name / file #</label>
-              <input value={caseName} onChange={(e) => setCaseName(e.target.value)} className="w-full rounded-xl border p-2" placeholder="e.g., Mann v. Debtor" />
+              <input value={caseName} onChange={(e) => setCaseName(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="e.g., Mann v. Debtor" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Debtor</label>
-              <input value={debtor} onChange={(e) => setDebtor(e.target.value)} className="w-full rounded-xl border p-2" placeholder="e.g., John Doe" />
+              <input value={debtor} onChange={(e) => setDebtor(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="e.g., John Doe" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Starting principal</label>
-                <input value={principalStart} onChange={(e) => setPrincipalStart(e.target.value)} className="w-full rounded-xl border p-2" placeholder="$10,000.00" />
+                <input value={principalStart} onChange={(e) => setPrincipalStart(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="$10,000.00" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Start date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-xl border p-2" />
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Annual interest rate (%)</label>
-              <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border p-2" placeholder="9.000" />
+              <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="9.000" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
-              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border p-2" />
+              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
             </div>
           </div>
 
@@ -205,8 +205,8 @@ export default function InterestCalculator() {
 
           {/* Right panel: entries & schedule */}
           <div className="lg:col-span-2 space-y-6 flex flex-col">
-          <div className="rounded-2xl shadow-sm bg-white p-5">
-            <h2 className="text-lg font-semibold mb-3">Entries</h2>
+          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
+            <h2 className="text-lg font-semibold mb-3 text-indigo-700">Entries</h2>
             {!headerSummary.principalValid || !headerSummary.startValid ? (
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">Enter a valid starting principal and start date to activate calculations.</p>
             ) : null}
@@ -225,11 +225,11 @@ export default function InterestCalculator() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3"><input type="date" value={r.date} onChange={(e) => updateRow(r.id, { date: e.target.value })} className="rounded-lg border p-2" /></td>
-                      <td className="py-2 pr-3"><select value={r.type} onChange={(e) => updateRow(r.id, { type: e.target.value })} className="rounded-lg border p-2"><option value="payment">Payment</option><option value="expense">Expense</option></select></td>
-                      <td className="py-2 pr-3"><select value={r.source} onChange={(e) => updateRow(r.id, { source: e.target.value })} className="rounded-lg border p-2"><option value="direct">Direct</option><option value="garnishee">Garnishee</option></select></td>
-                      <td className="py-2 pr-3"><input value={r.amount} onChange={(e) => updateRow(r.id, { amount: e.target.value })} className="rounded-lg border p-2 w-36" placeholder="$0.00" /></td>
-                      <td className="py-2 pr-3"><input value={r.note} onChange={(e) => updateRow(r.id, { note: e.target.value })} className="rounded-lg border p-2 w-full" placeholder="optional" /></td>
+                      <td className="py-2 pr-3"><input type="date" value={r.date} onChange={(e) => updateRow(r.id, { date: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" /></td>
+                      <td className="py-2 pr-3"><select value={r.type} onChange={(e) => updateRow(r.id, { type: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition"><option value="payment">Payment</option><option value="expense">Expense</option></select></td>
+                      <td className="py-2 pr-3"><select value={r.source} onChange={(e) => updateRow(r.id, { source: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition"><option value="direct">Direct</option><option value="garnishee">Garnishee</option></select></td>
+                      <td className="py-2 pr-3"><input value={r.amount} onChange={(e) => updateRow(r.id, { amount: e.target.value })} className="rounded-lg border border-gray-300 p-2 w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="$0.00" /></td>
+                      <td className="py-2 pr-3"><input value={r.note} onChange={(e) => updateRow(r.id, { note: e.target.value })} className="rounded-lg border border-gray-300 p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="optional" /></td>
                       <td className="py-2 pr-3 text-right"></td>
                     </tr>
                   ))}
@@ -238,8 +238,8 @@ export default function InterestCalculator() {
             </div>
           </div>
 
-          <div className="rounded-2xl shadow-sm bg-white p-5">
-            <h2 className="text-lg font-semibold mb-3">Amortization Schedule (Simple Interest)</h2>
+          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
+            <h2 className="text-lg font-semibold mb-3 text-indigo-700">Amortization Schedule (Simple Interest)</h2>
             <div className="mb-3 grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="rounded-xl bg-gray-50 p-3 border"><div className="text-xs text-gray-500">Principal (current)</div><div className="text-xl font-semibold">{currency(schedule.totals.principal)}</div></div>
               <div className="rounded-xl bg-gray-50 p-3 border"><div className="text-xs text-gray-500">Unpaid Interest (carryover)</div><div className="text-xl font-semibold">{currency(schedule.totals.carryInterest)}</div></div>
@@ -289,8 +289,8 @@ export default function InterestCalculator() {
             </div>
           </div>
 
-            <div className="rounded-2xl shadow-sm bg-white p-5">
-              <h3 className="text-base font-semibold mb-2">Methodology</h3>
+            <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-base font-semibold mb-2 text-indigo-700">Methodology</h3>
               <ol className="list-decimal ml-5 text-sm space-y-1 text-gray-700">
                 <li>Daily rate = (annual rate ÷ 365) per day. Accrued interest between entries = principal × daily rate × days.</li>
                 <li>Payments apply to accrued/unpaid interest first; the remainder reduces principal.</li>
@@ -298,8 +298,18 @@ export default function InterestCalculator() {
               </ol>
             </div>
               <div className="flex justify-end mt-auto pt-6 space-x-2">
-                <button onClick={printPDF} className="px-4 py-2 rounded-xl border shadow-sm">Print PDF</button>
-                <button onClick={clearAll} className="px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
+                <button onClick={printPDF} className="flex items-center space-x-2 px-4 py-2 rounded-xl border shadow-sm hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.506 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
+                  </svg>
+                  <span>Print PDF</span>
+                </button>
+                <button onClick={clearAll} className="flex items-center space-x-2 px-4 py-2 rounded-xl border shadow-sm hover:bg-gray-50 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                  </svg>
+                  <span>Clear rows</span>
+                </button>
               </div>
           </div>
       </div>
