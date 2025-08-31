@@ -28,15 +28,6 @@ function fmtDateISO(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 function fixed(n) { return Number.isFinite(n) ? Number(n).toFixed(2) : ""; }
-function escapeCsv(val) {
-  if (val == null) return "";
-  const s = String(val);
-  // Quote the field if it contains a comma, quote, or newline
-  if (/[",\n]/.test(s)) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
 function generateId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -144,70 +135,6 @@ export default function InterestCalculator() {
   function updateRow(id, patch) { setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
   function clearAll() { setRows([blankRow("payment")]); }
 
-  // ========================= CSV Export =========================
-  function exportCSV() {
-    const headers = [
-      "Date",
-      "Type",
-      "Source",
-      "Note",
-      "Days",
-      "Accrued Interest",
-      "Payment",
-      "Expense",
-      "Applied to Interest",
-      "Applied to Principal",
-      "Principal Before",
-      "Principal After",
-      "Unpaid Interest (Carryover)"
-    ];
-    const lines = [headers.map(escapeCsv).join(",")];
-    for (const r of schedule.rows) {
-      lines.push([
-        r.date,
-        r.type,
-        r.source || "",
-        r.note || "",
-        String(r.days),
-        fixed(r.accrued),
-        fixed(r.payment),
-        fixed(r.expense),
-        fixed(r.appliedToInterest),
-        fixed(r.appliedToPrincipal),
-        fixed(r.principalBefore),
-        fixed(r.principalAfter),
-        fixed(r.carryInterest)
-      ].map(escapeCsv).join(","));
-    }
-    lines.push("");
-    lines.push([
-      "Totals as of",
-      asOfDate || (schedule.rows.at(-1)?.date || startDate),
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      fixed(schedule.totals.principal),
-      fixed(schedule.totals.carryInterest),
-      fixed(schedule.totals.balance)
-    ].map(escapeCsv).join(","));
-    const blob = new Blob([lines.join("\n")], {
-      type: "text/csv;charset=utf-8;"
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const safeCase = caseName ? caseName.replace(/[^a-z0-9\-_. ]/gi, "_") : "schedule";
-    a.href = url;
-    a.download = `${safeCase}_simple_interest_schedule.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
 
   // ========================= UI =========================
   const headerSummary = useMemo(() => {
@@ -258,17 +185,16 @@ export default function InterestCalculator() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
-                <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border p-2" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
+                  <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border p-2" />
+                </div>
+                <div className="flex items-end">
+                  <button onClick={clearAll} className="mt-6 px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
+                </div>
               </div>
-              <div className="flex gap-3 items-end">
-                <button onClick={exportCSV} className="mt-6 px-4 py-2 rounded-xl bg-gray-900 text-white shadow-sm">Export CSV</button>
-                <button onClick={clearAll} className="mt-6 px-4 py-2 rounded-xl border shadow-sm">Clear rows</button>
               </div>
-            </div>
-            </div>
 
           </div>
 
