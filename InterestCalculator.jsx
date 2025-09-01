@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 // ========================= Helpers =========================
 function currency(n) {
@@ -149,74 +149,152 @@ export default function InterestCalculator() {
   function updateRow(id, patch) { setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r))); }
   function clearAll() { setRows([blankRow("payment")]); }
 
-  function printPDF() {
-    const pdf = new jsPDF();
-    pdf.setFontSize(pdfFontSize);
-    let y = 10;
-    pdf.text(`Case: ${caseName}`, 10, y); y += 10;
-    pdf.text(`Debtor: ${debtor}`, 10, y); y += 10;
-    pdf.text(`Starting principal: ${principalStart}`, 10, y); y += 10;
-    pdf.text(`Start date: ${fmtDateISO(startDate)}`, 10, y); y += 10;
-    pdf.text(`Annual rate (%): ${annualRatePct}`, 10, y); y += 10;
-    pdf.text(`As-of date: ${fmtDateISO(asOfDate)}`, 10, y); y += 20;
-    pdf.text("Schedule:", 10, y); y += 10;
+function printPDF() {
+  // --- Page & margins (Letter landscape in points) ---
+  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+  const pageWidth  = pdf.internal.pageSize.getWidth();   // 792pt
+  const pageHeight = pdf.internal.pageSize.getHeight();  // 612pt
+  const M = { top: 56, right: 40, bottom: 56, left: 40 }; // printable width = 792 - (40+40) = 712
 
-    pdf.autoTable({
-      head: [[
-        "Date",
-        "Type",
-        "Payment",
-        "Expense",
-        "→ Interest",
-        "→ Principal",
-        "Principal (after)",
-        "Unpaid Interest",
-        "Source",
-        "Note",
-      ]],
-      body: schedule.rows.map((r) => [
-        fmtDateISO(r.date),
-        r.type,
-        r.payment ? currency(r.payment) : "—",
-        r.expense ? currency(r.expense) : "—",
-        r.appliedToInterest ? currency(r.appliedToInterest) : "—",
-        r.appliedToPrincipal ? currency(r.appliedToPrincipal) : "—",
-        currency(r.principalAfter),
-        currency(r.carryInterest),
-        r.source || "",
-        r.note || "",
-      ]),
-      startY: y,
-      styles: { lineWidth: 0.1 },
-      tableLineColor: [0, 0, 0],
-      theme: "grid",
-    });
+  // --- Helpers ---
+  const safe = (s) => String(s ?? "")
+    .replace(/→/g, "->")
+    .replace(/\u2013|\u2014/g, "-"); // normalize dashes
 
-    // After the schedule table, output totals aligned at the end of the document
-    const finalY = pdf.lastAutoTable?.finalY || y;
-    const lines = [
-      `Principal (current): ${currency(schedule.totals.principal)}`,
-      `Unpaid Interest (carryover): ${currency(schedule.totals.carryInterest)}`,
-      `Total Due (as of ${fmtDateISO(asOfDate) || 'latest entry'}): ${currency(schedule.totals.balance)}`,
+  const money = (v) => currency(v) || "—"; // your currency() already formats
+
+  // --- Build compact rows for a table that truly fits ---
+  // We merge Payment/Expense into a single "Txn" column (expense as +$, payment as -$)
+  const body = schedule.rows.map((r) => {
+    const txn = r.expense ? `+${money(r.expense)}` : (r.payment ? `-${money(r.payment)}` : "—");
+    const applied = `${r.appliedToInterest ? money(r.appliedToInterest) : "—"} / ${r.appliedToPrincipal ? money(r.appliedToPrincipal) : "—"}`;
+    return {
+      date: fmtDateISO(r.date),
+      type: r.type,
+      days: String(r.days),
+      accr: money(r.accrued),
+      txn,
+      applied,
+      prin: safe(`${money(r.principalBefore)} -> ${money(r.principalAfter)}`),
+      carry: money(r.carryInterest),
+      src: safe(r.source || ""),
+      note: safe(r.note || "")
+    };
+  });
+
+  // --- Header block (drawn once per page in didDrawPage) ---
+  const drawHeader = () => {
+    const lh = 14;
+    let y = M.top; // start at top margin
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(13);
+    pdf.text("Simple Interest Schedule", M.left, y);
+    y += lh + 4;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+
+    // Two columns to save vertical space
+    const left = [
+      `Case: ${safe(caseName) || "—"}`,
+      `Debtor: ${safe(debtor) || "—"}`,
+      `Starting principal: ${money(principalStart)}`
     ];
+    const right = [
+      `Start date: ${fmtDateISO(startDate) || "—"}`,
+      `Annual rate (%): ${safe(annualRatePct) || "—"}`,
+      `As-of date: ${fmtDateISO(asOfDate) || "—"}`
+    ];
+    left.forEach((t, i)  => pdf.text(t, M.left, y + i * lh));
+    right.forEach((t, i) => pdf.text(t, pageWidth / 2, y + i * lh));
 
-    let startY = finalY + 10; // add spacing after table
-    const lineHeight = pdf.getLineHeight() / pdf.internal.scaleFactor;
-    const bottomMargin = 10;
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    // Totals row beneath meta
+    const yTotals = y + Math.max(left.length, right.length) * lh + 8;
+    const totals = [
+      `Principal (current): ${money(schedule.totals.principal)}`,
+      `Unpaid Interest (carryover): ${money(schedule.totals.carryInterest)}`,
+      `Total Due ${asOfDate ? `(as of ${fmtDateISO(asOfDate)})` : "(latest entry)"}: ${money(schedule.totals.balance)}`
+    ];
+    totals.forEach((t, i) => pdf.text(t, M.left + i * 230, yTotals)); // 3 items across
 
-    if (startY + lines.length * lineHeight > pageHeight - bottomMargin) {
-      pdf.addPage();
-      startY = 10;
+    // Return the Y-coordinate where content must start (leaving a safe gap)
+    return yTotals + 22; // header height used by the table start
+  };
+
+  // Compute the startY only for first page; next pages will re-draw the header in didDrawPage
+  const firstStartY = drawHeader();
+
+  // --- Table columns that FIT the printable width exactly (712pt total) ---
+  // widths: 56+44+34+60+60+82+110+70+52+144 = 712
+  const colWidths = {
+    date: 56,  // Date
+    type: 44,  // Type
+    days: 34,  // Days (right)
+    accr: 60,  // Accrued (right)
+    txn: 60,   // Txn (right)
+    applied: 82, // Applied I/P (right)
+    prin: 110, // Principal before->after
+    carry: 70, // Unpaid Interest (right)
+    src: 52,   // Source
+    note: 144  // Note
+  };
+
+  autoTable(pdf, {
+    columns: [
+      { header: "Date", dataKey: "date" },
+      { header: "Type", dataKey: "type" },
+      { header: "Days", dataKey: "days" },
+      { header: "Accrued", dataKey: "accr" },
+      { header: "Txn", dataKey: "txn" },
+      { header: "Applied (I / P)", dataKey: "applied" },
+      { header: "Principal (before -> after)", dataKey: "prin" },
+      { header: "Unpaid", dataKey: "carry" },
+      { header: "Src", dataKey: "src" },
+      { header: "Note", dataKey: "note" }
+    ],
+    body,
+    startY: firstStartY, // <- guarantees no header overlap on page 1
+    margin: { left: M.left, right: M.right, bottom: M.bottom, top: M.top },
+    tableWidth: "wrap", // respect the margins; don't overflow horizontally
+    styles: { font: "helvetica", fontSize: Number.isFinite(pdfFontSize) ? pdfFontSize : 8, cellPadding: 3, overflow: "linebreak" },
+    headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: "bold" }, // indigo header
+    columnStyles: {
+      date: { cellWidth: colWidths.date },
+      type: { cellWidth: colWidths.type },
+      days: { cellWidth: colWidths.days, halign: "right" },
+      accr: { cellWidth: colWidths.accr, halign: "right" },
+      txn:  { cellWidth: colWidths.txn,  halign: "right" },
+      applied: { cellWidth: colWidths.applied, halign: "right" },
+      prin: { cellWidth: colWidths.prin },
+      carry:{ cellWidth: colWidths.carry, halign: "right" },
+      src:  { cellWidth: colWidths.src },
+      note: { cellWidth: colWidths.note }
+    },
+    didDrawPage: () => {
+      // Re-draw header on every page and keep the same spacing before table
+      const y = drawHeader();
+      // If AutoTable started too high on a new page, nudge it down by increasing the top margin for that page
+      // (AutoTable handles page breaks; we only ensure header is above).
     }
+  });
 
-    lines.forEach((text, i) => {
-      pdf.text(text, 10, startY + i * lineHeight);
-    });
-
-    pdf.save(`${caseName || "schedule"}.pdf`);
+  // Footer page numbers
+  const pageCount = pdf.getNumberOfPages();
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(120);
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i);
+    pdf.text(
+      `Page ${i} of ${pageCount}`,
+      pageWidth - M.right,
+      pageHeight - 20,
+      { align: "right" }
+    );
   }
 
+  pdf.save(`${safe(caseName) || "schedule"}.pdf`);
+}
 
   // ========================= UI =========================
   const headerSummary = useMemo(() => {
@@ -224,165 +302,360 @@ export default function InterestCalculator() {
     return { principalValid: Number.isFinite(p0) && p0 >= 0, startValid: !!startDate };
   }, [principalStart, startDate]);
 
-  return (
-    <div className="min-h-screen w-full bg-gray-100 text-gray-800 p-4 md:p-6 font-sans">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Left panel: calculator */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
-            <h1 className="text-2xl font-semibold mb-1 text-indigo-700">Simple Interest Calculator</h1>
-            <p className="text-sm text-gray-500">Payments, expenses, and daily simple interest.</p>
-          </div>
+	return (
+	  <>
+		{/* Brand Header */}
+		<header className="sticky top-0 z-30 bg-ink text-white border-b border-black/20">
+		  <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+			<div>
+			  <h1 className="text-lg font-semibold tracking-tight">Simple Interest Calculator</h1>
+			  <p className="text-xs text-white/70">Matter finance · daily simple interest · printable ledgers</p>
+			</div>
+			<div className="flex items-center gap-2">
+			  {/* Dark mode toggle with persistence */}
+			  <button
+				type="button"
+				onClick={() => {
+				  const el = document.documentElement;
+				  const next = !el.classList.contains("dark");
+				  el.classList.toggle("dark", next);
+				  localStorage.setItem("theme", next ? "dark" : "light");
+				}}
+				className="px-3 py-1.5 rounded-xl border border-white/20 text-sm hover:bg-white/10"
+				title="Toggle dark mode"
+			  >
+				🌙 / ☀️
+			  </button>
 
-          {/* Core calculator inputs */}
-          <div className="rounded-2xl bg-white p-4 md:p-6 space-y-4 shadow-md hover:shadow-lg transition-shadow">
-            <div>
-              <label className="block text-sm font-medium mb-1">Case name / file #</label>
-              <input value={caseName} onChange={(e) => setCaseName(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="e.g., Mann v. Debtor" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Debtor</label>
-              <input value={debtor} onChange={(e) => setDebtor(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="e.g., John Doe" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Starting principal</label>
-                <input value={principalStart} onChange={(e) => setPrincipalStart(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="$10,000.00" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Start date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Annual interest rate (%)</label>
-              <input value={annualRatePct} onChange={(e) => setAnnualRatePct(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="9.000" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">As-of date (preview)</label>
-              <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
-            </div>
-          </div>
+			  <button
+				onClick={printPDF}
+				className="px-3 py-1.5 rounded-xl bg-brand text-ink text-sm hover:brightness-95"
+			  >
+				Export PDF
+			  </button>
 
-        </div>
+			  <button
+				onClick={clearAll}
+				className="px-3 py-1.5 rounded-xl border border-white/20 text-sm hover:bg-white/10"
+			  >
+				Clear
+			  </button>
+			</div>
+		  </div>
+		</header>
 
-          {/* Right panel: entries & schedule */}
-          <div className="lg:col-span-2 space-y-6 flex flex-col">
-          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
-            <h2 className="text-lg font-semibold mb-3 text-indigo-700">Entries</h2>
-            {!headerSummary.principalValid || !headerSummary.startValid ? (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">Enter a valid starting principal and start date to activate calculations.</p>
-            ) : null}
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-600 border-b">
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Type</th>
-                    <th className="py-2 pr-3">Source</th>
-                    <th className="py-2 pr-3">Amount</th>
-                    <th className="py-2 pr-3">Note</th>
-                    <th className="py-2 pr-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3"><input type="date" value={r.date} onChange={(e) => updateRow(r.id, { date: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" /></td>
-                      <td className="py-2 pr-3"><select value={r.type} onChange={(e) => updateRow(r.id, { type: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition"><option value="payment">Payment</option><option value="expense">Expense</option></select></td>
-                      <td className="py-2 pr-3"><select value={r.source} onChange={(e) => updateRow(r.id, { source: e.target.value })} className="rounded-lg border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition"><option value="direct">Direct</option><option value="garnishee">Garnishee</option></select></td>
-                      <td className="py-2 pr-3"><input value={r.amount} onChange={(e) => updateRow(r.id, { amount: e.target.value })} className="rounded-lg border border-gray-300 p-2 w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="$0.00" /></td>
-                      <td className="py-2 pr-3"><input value={r.note} onChange={(e) => updateRow(r.id, { note: e.target.value })} className="rounded-lg border border-gray-300 p-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" placeholder="optional" /></td>
-                      <td className="py-2 pr-3 text-right"></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+		{/* Page Surface */}
+		<div className="min-h-screen w-full bg-white text-ink dark:bg-ink dark:text-white">
+		  <div className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
 
-          <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
-            <h2 className="text-lg font-semibold mb-3 text-indigo-700">Amortization Schedule (Simple Interest)</h2>
-            <div className="mb-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl bg-gray-50 p-3 border"><div className="text-xs text-gray-500">Principal (current)</div><div className="text-xl font-semibold">{currency(schedule.totals.principal)}</div></div>
-              <div className="rounded-xl bg-gray-50 p-3 border"><div className="text-xs text-gray-500">Unpaid Interest (carryover)</div><div className="text-xl font-semibold">{currency(schedule.totals.carryInterest)}</div></div>
-              <div className="rounded-xl bg-gray-50 p-3 border"><div className="text-xs text-gray-500">Total Due {asOfDate ? `(as of ${fmtDateISO(asOfDate)})` : "(latest entry)"}</div><div className="text-xl font-semibold">{currency(schedule.totals.balance)}</div></div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs md:text-sm">
-                <thead>
-                  <tr className="text-left text-gray-600 border-b">
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Type</th>
-                    <th className="py-2 pr-3">Days</th>
-                    <th className="py-2 pr-3">Accrued</th>
-                    <th className="py-2 pr-3">Payment</th>
-                    <th className="py-2 pr-3">Expense</th>
-                    <th className="py-2 pr-3">→ Interest</th>
-                    <th className="py-2 pr-3">→ Principal</th>
-                    <th className="py-2 pr-3">Principal (before → after)</th>
-                    <th className="py-2 pr-3">Unpaid Interest</th>
-                    <th className="py-2 pr-3">Source</th>
-                    <th className="py-2 pr-3">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedule.rows.length === 0 ? (
-                    <tr><td colSpan={12} className="py-6 text-center text-gray-500">Enter starting values and at least one entry to see the schedule.</td></tr>
-                  ) : (
-                    schedule.rows.map((r, i) => (
-                      <tr key={`${r.date}-${i}`} className="border-b last:border-b-0">
-                        <td className="py-2 pr-3 font-mono">{fmtDateISO(r.date)}</td>
-                        <td className="py-2 pr-3 capitalize">{r.type}</td>
-                        <td className="py-2 pr-3">{r.days}</td>
-                        <td className="py-2 pr-3">{currency(r.accrued)}</td>
-                        <td className="py-2 pr-3">{r.payment ? currency(r.payment) : "—"}</td>
-                        <td className="py-2 pr-3">{r.expense ? currency(r.expense) : "—"}</td>
-                        <td className="py-2 pr-3">{r.appliedToInterest ? currency(r.appliedToInterest) : "—"}</td>
-                        <td className="py-2 pr-3">{r.appliedToPrincipal ? currency(r.appliedToPrincipal) : "—"}</td>
-                        <td className="py-2 pr-3">{currency(r.principalBefore)} → {currency(r.principalAfter)}</td>
-                        <td className="py-2 pr-3">{currency(r.carryInterest)}</td>
-                        <td className="py-2 pr-3">{r.source || ""}</td>
-                        <td className="py-2 pr-3">{r.note || ""}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+			{/* Left Sidebar (320px) */}
+			<div className="space-y-4">
+			  <div className="rounded-2xl bg-white dark:bg-gray-800 p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+				<h2 className="text-base font-semibold mb-3">Matter details</h2>
+				<div className="space-y-4">
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Case name / file #</span>
+					<input
+					  value={caseName}
+					  onChange={(e) => setCaseName(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					  placeholder="e.g., Mann v. Debtor"
+					/>
+				  </label>
 
-            <div className="rounded-2xl bg-white p-4 md:p-6 shadow-md hover:shadow-lg transition-shadow">
-              <h3 className="text-base font-semibold mb-2 text-indigo-700">Methodology</h3>
-              <ol className="list-decimal ml-5 text-sm space-y-1 text-gray-700">
-                <li>Daily rate = (annual rate ÷ 365) per day. Accrued interest between entries = principal × daily rate × days.</li>
-                <li>Payments apply to accrued/unpaid interest first; the remainder reduces principal.</li>
-                <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
-              </ol>
-            </div>
-              <div className="flex justify-end mt-auto pt-6 space-x-2">
-                <input
-                  type="number"
-                  aria-label="PDF font size"
-                  value={pdfFontSize}
-                  onChange={(e) => setPdfFontSize(Number(e.target.value))}
-                  className="w-16 px-2 py-1 rounded-xl border shadow-sm text-sm"
-                />
-                <button onClick={printPDF} className="flex items-center space-x-2 px-4 py-2 rounded-xl border shadow-sm hover:bg-gray-50 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.506 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
-                  </svg>
-                  <span>Print PDF</span>
-                </button>
-                <button onClick={clearAll} className="flex items-center space-x-2 px-4 py-2 rounded-xl border shadow-sm hover:bg-gray-50 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                  </svg>
-                  <span>Clear rows</span>
-                </button>
-              </div>
-          </div>
-      </div>
-    </div>
-  );
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Debtor</span>
+					<input
+					  value={debtor}
+					  onChange={(e) => setDebtor(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					  placeholder="e.g., John Doe"
+					/>
+				  </label>
+				</div>
+
+				<hr className="my-5 border-gray-200 dark:border-gray-700" />
+
+				<h3 className="text-sm font-medium mb-3">Calculation settings</h3>
+				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Starting principal</span>
+					<input
+					  value={principalStart}
+					  onChange={(e) => setPrincipalStart(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					  placeholder="$10,000.00"
+					/>
+				  </label>
+
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Start date</span>
+					<input
+					  type="date"
+					  value={startDate}
+					  onChange={(e) => setStartDate(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					/>
+				  </label>
+
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Annual interest rate (%)</span>
+					<input
+					  value={annualRatePct}
+					  onChange={(e) => setAnnualRatePct(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					  placeholder="9.000"
+					/>
+				  </label>
+
+				  <label className="block">
+					<span className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">As-of date (preview)</span>
+					<input
+					  type="date"
+					  value={asOfDate}
+					  onChange={(e) => setAsOfDate(e.target.value)}
+					  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300"
+					/>
+				  </label>
+				</div>
+
+				<p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+				  Simple interest @ {annualRatePct || "—"}% on 365-day basis. Payments apply to interest first, then principal.
+				</p>
+			  </div>
+			</div>
+
+			{/* Right Column */}
+			<div className="space-y-6 flex flex-col">
+
+			  {/* Sticky Totals Bar */}
+			  <div className="sticky top-16 z-20 rounded-xl border bg-white dark:bg-ink/80 backdrop-blur p-3 flex flex-wrap gap-3">
+				<div className="rounded-xl border px-3 py-2">
+				  <div className="text-xs opacity-70">Principal</div>
+				  <div className="text-lg font-semibold text-brand">{currency(schedule.totals.principal)}</div>
+				</div>
+				<div className="rounded-xl border px-3 py-2">
+				  <div className="text-xs opacity-70">Unpaid Interest</div>
+				  <div className="text-lg font-semibold text-brand">{currency(schedule.totals.carryInterest)}</div>
+				</div>
+				<div className="rounded-xl border px-3 py-2">
+				  <div className="text-xs opacity-70">{asOfDate ? `Total Due (as of ${fmtDateISO(asOfDate)})` : "Total Due"}</div>
+				  <div className="text-lg font-semibold text-brand">{currency(schedule.totals.balance)}</div>
+				</div>
+			  </div>
+
+			  {/* Entries */}
+			  <div className="rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-200 dark:border-gray-700"
+				   style={{ boxShadow: 'inset 4px 0 0 0 #AD8D62' }}>
+				<div className="flex items-center justify-between mb-3">
+				  <h2 className="text-base font-semibold">Entries</h2>
+				  {!headerSummary.principalValid || !headerSummary.startValid ? (
+					<span className="text-xs text-amber-700 bg-amber-50/80 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-1">
+					  Enter a valid starting principal and start date to activate calculations.
+					</span>
+				  ) : null}
+				</div>
+
+				<div className="overflow-auto max-h-[56vh] rounded-xl border border-gray-200 dark:border-gray-700">
+				  <table className="min-w-full text-sm">
+					<thead className="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700">
+					  <tr className="text-left text-gray-600 dark:text-gray-300">
+						<th className="py-2 pr-3">Date</th>
+						<th className="py-2 pr-3">Type</th>
+						<th className="py-2 pr-3">Source</th>
+						<th className="py-2 pr-3 text-right">Amount</th>
+						<th className="py-2 pr-3">Note</th>
+						<th className="py-2 pr-3 w-12"></th>
+					  </tr>
+					</thead>
+					<tbody className="[&>tr:nth-child(odd)]:bg-gray-50/60 dark:[&>tr:nth-child(odd)]:bg-gray-900/20">
+					  {rows.map((r) => (
+						<tr key={r.id} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+						  <td className="py-2 pr-3">
+							<input
+							  type="date"
+							  value={r.date}
+							  onChange={(e) => updateRow(r.id, { date: e.target.value })}
+							  className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+							/>
+						  </td>
+						  <td className="py-2 pr-3">
+							<select
+							  value={r.type}
+							  onChange={(e) => updateRow(r.id, { type: e.target.value })}
+							  className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1"
+							>
+							  <option value="payment">Payment</option>
+							  <option value="expense">Expense</option>
+							</select>
+						  </td>
+						  <td className="py-2 pr-3">
+							<select
+							  value={r.source}
+							  onChange={(e) => updateRow(r.id, { source: e.target.value })}
+							  className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1"
+							>
+							  <option value="direct">Direct</option>
+							  <option value="garnishee">Garnishee</option>
+							</select>
+						  </td>
+						  <td className="py-2 pr-3 text-right">
+							<input
+							  value={r.amount}
+							  onChange={(e) => updateRow(r.id, { amount: e.target.value })}
+							  className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 w-36 text-right"
+							  placeholder="$0.00"
+							/>
+						  </td>
+						  <td className="py-2 pr-3">
+							<input
+							  value={r.note}
+							  onChange={(e) => updateRow(r.id, { note: e.target.value })}
+							  className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-1 w-full"
+							  placeholder="optional"
+							/>
+						  </td>
+						  <td className="py-2 pr-3 text-right">{/* reserved for per-row actions */}</td>
+						</tr>
+					  ))}
+					</tbody>
+				  </table>
+				</div>
+
+				{/* Entries Toolbar */}
+				<div className="mt-3 flex flex-wrap items-center gap-2 justify-end">
+				  <div className="flex items-center space-x-2 mr-auto">
+					<label htmlFor="pdfFontSize" className="text-sm text-gray-600 dark:text-gray-300">
+					  PDF font size
+					</label>
+					<input
+					  id="pdfFontSize"
+					  type="number"
+					  min={6}
+					  max={18}
+					  step={1}
+					  value={pdfFontSize}
+					  onChange={(e) => setPdfFontSize(Number(e.target.value))}
+					  className="w-20 px-2 py-1 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm shadow-sm"
+					  title="Controls the font size used in the exported PDF"
+					/>
+					<button
+					  type="button"
+					  onClick={() => setPdfFontSize((s) => Math.max(6, s - 1))}
+					  className="px-2 py-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm"
+					  aria-label="Decrease PDF font size"
+					>
+					  A–
+					</button>
+					<button
+					  type="button"
+					  onClick={() => setPdfFontSize((s) => Math.min(18, s + 1))}
+					  className="px-2 py-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm"
+					  aria-label="Increase PDF font size"
+					>
+					  A+
+					</button>
+				  </div>
+				  <button
+					onClick={printPDF}
+					className="px-3 py-2 rounded-xl bg-brand text-ink text-sm hover:brightness-95"
+				  >
+					Export PDF
+				  </button>
+				  <button
+					onClick={clearAll}
+					className="px-3 py-2 rounded-xl border text-sm hover:bg-black/5 dark:hover:bg-white/10"
+				  >
+					Clear rows
+				  </button>
+				</div>
+			  </div>
+
+			  {/* Schedule */}
+			  <div className="rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+				<h2 className="text-base md:text-lg font-semibold mb-3">Amortization schedule</h2>
+
+				<div className="mb-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+				  <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-3 border border-gray-200 dark:border-gray-700">
+					<div className="text-xs text-gray-500 dark:text-gray-400">Principal (current)</div>
+					<div className="text-xl font-semibold">{currency(schedule.totals.principal)}</div>
+				  </div>
+				  <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-3 border border-gray-200 dark:border-gray-700">
+					<div className="text-xs text-gray-500 dark:text-gray-400">Unpaid Interest (carryover)</div>
+					<div className="text-xl font-semibold">{currency(schedule.totals.carryInterest)}</div>
+				  </div>
+				  <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 p-3 border border-gray-200 dark:border-gray-700">
+					<div className="text-xs text-gray-500 dark:text-gray-400">
+					  Total Due {asOfDate ? `(as of ${fmtDateISO(asOfDate)})` : "(latest entry)"}
+					</div>
+					<div className="text-xl font-semibold">{currency(schedule.totals.balance)}</div>
+				  </div>
+				</div>
+
+				<div className="overflow-x-auto">
+				  <table className="min-w-full text-xs md:text-sm">
+					<thead>
+					  <tr className="text-left text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+						<th className="py-2 pr-3">Date</th>
+						<th className="py-2 pr-3">Type</th>
+						<th className="py-2 pr-3 text-right">Days</th>
+						<th className="py-2 pr-3 text-right">Accrued</th>
+						<th className="py-2 pr-3 text-right">Payment</th>
+						<th className="py-2 pr-3 text-right">Expense</th>
+						<th className="py-2 pr-3 text-right">→ Interest</th>
+						<th className="py-2 pr-3 text-right">→ Principal</th>
+						<th className="py-2 pr-3">Principal (before → after)</th>
+						<th className="py-2 pr-3 text-right">Unpaid Interest</th>
+						<th className="py-2 pr-3">Source</th>
+						<th className="py-2 pr-3">Note</th>
+					  </tr>
+					</thead>
+					<tbody>
+					  {schedule.rows.length === 0 ? (
+						<tr>
+						  <td colSpan={12} className="py-8 text-center text-gray-500 dark:text-gray-400">
+							Add a starting principal, start date, and at least one entry to see the schedule.
+						  </td>
+						</tr>
+					  ) : (
+						schedule.rows.map((r, i) => (
+						  <tr key={`${r.date}-${i}`} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+							<td className="py-2 pr-3 font-mono">{fmtDateISO(r.date)}</td>
+							<td className="py-2 pr-3 capitalize">{r.type}</td>
+							<td className="py-2 pr-3 text-right">{r.days}</td>
+							<td className="py-2 pr-3 text-right">{currency(r.accrued)}</td>
+							<td className="py-2 pr-3 text-right">{r.payment ? currency(r.payment) : "—"}</td>
+							<td className="py-2 pr-3 text-right">{r.expense ? currency(r.expense) : "—"}</td>
+							<td className="py-2 pr-3 text-right">{r.appliedToInterest ? currency(r.appliedToInterest) : "—"}</td>
+							<td className="py-2 pr-3 text-right">{r.appliedToPrincipal ? currency(r.appliedToPrincipal) : "—"}</td>
+							<td className="py-2 pr-3">{currency(r.principalBefore)} → {currency(r.principalAfter)}</td>
+							<td className="py-2 pr-3 text-right">{currency(r.carryInterest)}</td>
+							<td className="py-2 pr-3">{r.source || ""}</td>
+							<td className="py-2 pr-3">{r.note || ""}</td>
+						  </tr>
+						))
+					  )}
+					</tbody>
+				  </table>
+				</div>
+			  </div>
+
+			  {/* Methodology */}
+			  <details className="rounded-2xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-200 dark:border-gray-700 group">
+				<summary className="cursor-pointer select-none text-base font-semibold flex items-center justify-between">
+				  Methodology
+				  <span className="text-xs text-gray-500 dark:text-gray-400 group-open:hidden">Show</span>
+				  <span className="text-xs text-gray-500 dark:text-gray-400 hidden group-open:inline">Hide</span>
+				</summary>
+				<ol className="mt-3 list-decimal ml-5 text-sm space-y-1 text-gray-700 dark:text-gray-300">
+				  <li>Daily rate = (annual rate ÷ 365). Accrued between entries = principal × daily rate × days.</li>
+				  <li>Payments apply to accrued/unpaid interest first; remainder reduces principal.</li>
+				  <li>Expenses increase principal on their effective date; interest is simple (no compounding).</li>
+				</ol>
+			  </details>
+			</div>
+		  </div>
+		</div>
+	  </>
+	);
 }
