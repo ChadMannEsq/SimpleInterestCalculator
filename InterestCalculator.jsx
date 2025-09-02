@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -311,8 +312,14 @@ function printPDF() {
 			  <h1 className="text-lg font-semibold tracking-tight">Simple Interest Calculator</h1>
 			  <p className="text-xs text-white/70">Matter finance · daily simple interest · printable ledgers</p>
 			</div>
-			<div className="flex items-center gap-2">
-			  {/* Dark mode toggle with persistence */}
+                        <div className="flex items-center gap-2">
+                          <Link
+                                to="/"
+                                className="px-3 py-1.5 rounded-xl border border-white/20 text-sm hover:bg-white/10"
+                          >
+                                Home
+                          </Link>
+                          {/* Dark mode toggle with persistence */}
 			  <button
 				type="button"
 				onClick={() => {
